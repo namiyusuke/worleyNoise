@@ -1,0 +1,45 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@theme inline {
+  --color-primary: #262626; /* neutral-800 */
+  --color-secondary: #171717; /* neutral-900 */
+  --color-tertiary: #404040; /* neutral-700 */
+  --color-color: #f3f3f3;
+  --color-accent-primary: #2563eb; /* blue-600 */
+  --color-accent-primary-state: #1d4ed8; /* blue-700 */
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+}
+
+.github-corner:hover .octo-arm {
+  animation: octocat-wave 560ms ease-in-out;
+}
+
+@keyframes octocat-wave {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20%,
+  60% {
+    transform: rotate(-25deg);
+  }
+  40%,
+  80% {
+    transform: rotate(10deg);
+  }
+}
+
+@media (max-width: 500px) {
+  .github-corner:hover .octo-arm {
+    animation: none;
+  }
+  .github-corner .octo-arm {
+    animation: octocat-wave 560ms ease-in-out;
+  }
+}
