@@ -34,6 +34,12 @@ void main() {
   vec2 uv = vUv * uNormalRepeat;
   vec3 N = perturbNormal(vWorldPosition, normalize(vWorldNormal), uv);
 
-  // ノーマルをそのまま色として出力する ([-1,1] -> [0,1])
-  gl_FragColor = vec4(N * 0.5 + 0.5, 1.0);
+  // dot積によるシンプルな拡散照明
+  vec3 L = normalize(uLightDirection);
+  float diffuse = max(dot(N, L), 0.0);
+
+  // 影色と光色をdiffuseでミックスしたものを加える
+  vec3 diffuseColor = mix(vec3(0.55, 0.64, 0.75), vec3(0.96, 0.97, 0.98), diffuse);
+
+  gl_FragColor = vec4(uColor * diffuse + diffuseColor, 1.0);
 }

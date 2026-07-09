@@ -89,7 +89,7 @@ float fbm(vec3 p) {
 
 void main() {
   // インスタンスのX/Yスケール比でUVを補正（横方向を5倍、縦をvRatioでスケール）
-  vec2 ratioUV = vec2(5.0, vRatio) * vUv;
+  vec2 ratioUV = vec2(5.0, 2.) * vUv;
 
   // ノイズテクスチャでUV(y)を歪ませるドメインワーピング。速度違いの2層で乱流感を出す
   vec2 dUv = vUv;
@@ -97,8 +97,11 @@ void main() {
   dUv.y -= 0.3 * (texture2D(uNoise, ratioUV * 0.08 + uTime * vec2(-0.005, -0.02)).r - 0.5);
 
   // 歪ませたUVでサンプリングして雲のしきい値マスクを作る
-  float smoothess = smoothstep(0.4, 0.7, texture2D(uNoise, ratioUV * 0.08).r);
-
-  float alpha = smoothess;
-  gl_FragColor = vec4(dUv, 0.0, alpha);
+  float smoothness = smoothstep(0.4, 0.7, texture2D(uNoise, ratioUV * 0.08 + vec2(-.08 ,-.04)* uTime ).r);
+  float clouds = smoothstep(.9 - .1 * smoothness, .7, dUv.y);
+  clouds *= smoothstep(0.0, .2, dUv.y - .2 * smoothstep(0., 0.1, dUv.x));
+  float cloudDarkness = smoothstep(.4,1.,dUv.y) + smoothstep(.4,0.,dUv.y);
+  vec3 color =mix(vec3(.82,.86,.88),1.1 * vec3(.96,.96,.96),cloudDarkness);
+  float alpha = clouds * smoothstep(1., .9, vUv.y) * smoothstep(0., .1, vUv.y)*smoothstep(1., .9, vUv.x) * smoothstep(0., .1, vUv.x);
+  gl_FragColor = vec4(vec3(color),alpha);
 }

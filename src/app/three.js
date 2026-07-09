@@ -90,15 +90,20 @@ export default class Three {
   setMaterials() {
     const normalMap = this.assets.textures.rockNormal;
 
+    // dot積による拡散照明のライト方向
+    const lightDirection = new THREE.Vector3(0.4, 0.5, 0.8);
+
     // 大きな山 (mountains.glb / material "Mountain")
     this.mountainMaterial = new THREE.ShaderMaterial({
       vertexShader: terrainVertex,
       fragmentShader: terrainFragment,
       side: THREE.DoubleSide,
       uniforms: {
+        uColor: { value: new THREE.Color(0xffffff) },
         uNormalMap: { value: normalMap },
         uNormalScale: { value: new THREE.Vector2(1, 1) },
-        uNormalRepeat: { value: new THREE.Vector2(8, 8) }
+        uNormalRepeat: { value: new THREE.Vector2(3, 5) },
+        uLightDirection: { value: lightDirection.clone() }
       }
     });
 
@@ -108,9 +113,11 @@ export default class Three {
       fragmentShader: terrainFragment,
       side: THREE.DoubleSide,
       uniforms: {
+        uColor: { value: new THREE.Color(0xffffff) },
         uNormalMap: { value: normalMap },
         uNormalScale: { value: new THREE.Vector2(0.6, 0.6) },
-        uNormalRepeat: { value: new THREE.Vector2(3, 3) }
+        uNormalRepeat: { value: new THREE.Vector2(3, 5) },
+        uLightDirection: { value: lightDirection.clone() }
       }
     });
 
@@ -165,6 +172,66 @@ export default class Three {
     // ワールド行列を確定させてからPoint系のworldPositionを取得
     mountains.updateWorldMatrix(true, true);
     this.setCameraFromPoints(mountains);
+
+    // スクロール連動カメラ（CameraPath / TargetPathに沿って動かす）
+    this.setScrollPath(mountains);
+  }
+
+  // CameraPath(カメラ位置) と TargetPath(注視点) のラインからカーブを生成し、
+  // ページのスクロール量に合わせてカメラを動かす。
+  setScrollPath(mountains) {
+    // ホームページから下へ降りていく縦パス。終点がPoint-Homepage(初期カメラ位置)と一致する。
+    const cameraLine = mountains.getObjectByName('Path-TopChapters');
+    const targetLine = mountains.getObjectByName('TargetPath-TopChapters');
+
+    if (!cameraLine || !targetLine) {
+      console.warn('Path-TopChapters / TargetPath-TopChapters が見つかりません', { cameraLine, targetLine });
+      return;
+    }
+
+    // ラインのworldPositionの頂点列からCatmullRomの滑らかなカーブを作る
+    const toCurve = (line) => {
+      line.updateWorldMatrix(true, false);
+      const attr = line.geometry.attributes.position;
+      const points = [];
+      const v = new THREE.Vector3();
+      for (let i = 0; i < attr.count; i++) {
+        v.fromBufferAttribute(attr, i).applyMatrix4(line.matrixWorld);
+        points.push(v.clone());
+      }
+      // パスの終点がPoint-Homepageの初期カメラ位置なので、
+      // t=0がホームページ、下へ行くほどt=1になるよう頂点列を反転する。
+      points.reverse();
+      return new THREE.CatmullRomCurve3(points);
+    };
+
+    this.cameraCurve = toCurve(cameraLine);
+    this.targetCurve = toCurve(targetLine);
+
+    // パスのラインそのものは見せない
+    cameraLine.visible = false;
+    targetLine.visible = false;
+
+    // スクロールで注視するのでOrbitControlsは無効化
+    this.controls.enabled = false;
+
+    // 現在値(scroll)と目標値(targetScroll)。renderでlerpして滑らかに追従させる。
+    this.scroll = 0;
+    this.targetScroll = 0;
+
+    // 全画面canvasを固定し、スクロール用のダミー高さ(400vh)を作る
+    this.canvas.style.position = 'fixed';
+    this.canvas.style.top = '0';
+    this.canvas.style.left = '0';
+    this.scrollSpacer = document.createElement('div');
+    this.scrollSpacer.style.height = '400vh';
+    this.scrollSpacer.style.pointerEvents = 'none';
+    document.body.appendChild(this.scrollSpacer);
+
+    window.addEventListener('scroll', () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      this.targetScroll = max > 0 ? window.scrollY / max : 0;
+    });
   }
 
   // mountains内のPoint-Homepage / TargetPoint-HomepageのworldPositionでカメラを配置
@@ -197,7 +264,18 @@ export default class Three {
       this.cloudMaterial.uniforms.uTime.value = elapsedTime;
     }
 
-    this.controls.update();
+    // スクロール連動カメラ：カーブに沿ってカメラ位置と注視点を補間する
+    if (this.cameraCurve && this.targetCurve) {
+      // 目標スクロール量に滑らかに追従（イージング）
+      this.scroll += (this.targetScroll - this.scroll) * 0.08;
+      const t = Math.min(Math.max(this.scroll, 0), 1);
+
+      this.camera.position.copy(this.cameraCurve.getPointAt(t));
+      this.camera.lookAt(this.targetCurve.getPointAt(t));
+    } else {
+      this.controls.update();
+    }
+
     this.renderer.render(this.scene, this.camera);
   }
 
